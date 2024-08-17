@@ -17,12 +17,18 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
 
+	"aedificans.com/k8s-ssm-param-injector/pkg/injector"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -52,19 +58,20 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
-		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
+	var awsRegion string
+	flag.StringVar(&awsRegion, "aws-region", "us-east-1",
+		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&enableHTTP2, "enable-http2", false,
+		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
+		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.BoolVar(&enableHTTP2, "enable-http2", false,
-		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	opts := zap.Options{
-		Development: true,
-		Level:       zapcore.InfoLevel,
 		Encoder: zapcore.NewJSONEncoder(zapcore.EncoderConfig{
 			MessageKey:   "msg",
 			LevelKey:     "level",
@@ -79,7 +86,8 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)).
+		WithValues("version", "0.0.1", "commit", "abcd1234"))
 
 	disableHTTP2 := func(c *tls.Config) {
 		setupLog.Info("disabling http/2")
@@ -105,11 +113,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	cfg, err := awsConfig.LoadDefaultConfig(context.TODO(), awsConfig.WithRegion(awsRegion))
+	if err != nil {
+		setupLog.Error(err, "failed to load aws config")
+		panic(err)
+	}
+
+	ssmClient := ssm.NewFromConfig(cfg)
+
 	webhookServer := webhook.NewServer(webhook.Options{
 		CertDir: "ssl",
 		Port:    8443,
 		TLSOpts: tlsOpts,
 	})
+	webhookServer.Register("/mutate", &webhook.Admission{
+		Handler: &injector.SSMParameterInjector{
+			SsmClient: ssmClient,
+			Decoder:   admission.NewDecoder(scheme)}})
 	mgr.Add(webhookServer)
 
 	// +kubebuilder:scaffold:builder
