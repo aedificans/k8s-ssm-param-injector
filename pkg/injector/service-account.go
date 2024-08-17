@@ -39,7 +39,7 @@ func (s *SSMParameterInjector) handleServiceAccount(ctx context.Context, req adm
 		V(1).Info("ServiceAccount successfully decoded")
 
 	if serviceAccount.Annotations == nil {
-		log.Log.V(0).Info("No annotations present on the ServiceAccount")
+		log.Log.Info("No annotations present on the ServiceAccount")
 		return admission.Allowed("No modifications required")
 	}
 
@@ -49,7 +49,7 @@ func (s *SSMParameterInjector) handleServiceAccount(ctx context.Context, req adm
 	}
 
 	if !wasModified {
-		log.Log.V(0).Info("No SSM parameters found")
+		log.Log.Info("No SSM parameters found")
 		return admission.Allowed("No modifications required")
 	}
 
@@ -59,6 +59,6 @@ func (s *SSMParameterInjector) handleServiceAccount(ctx context.Context, req adm
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
 
-	log.Log.V(0).Info("Returning JSON patch for value injection(s)")
+	log.Log.Info("Returning JSON patch for value injection(s)")
 	return admission.PatchResponseFromRaw(req.Object.Raw, serviceAccountJson)
 }

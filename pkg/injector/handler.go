@@ -34,6 +34,9 @@ type SSMParameterInjector struct {
 
 func (s *SSMParameterInjector) Handle(ctx context.Context, req admission.Request) admission.Response {
 	switch req.Kind.Kind {
+	case "Ingress":
+		log.Log.WithValues("action", req.Operation).Info("Ingress request received")
+		return s.handleIngress(ctx, req)
 	case "ServiceAccount":
 		log.Log.WithValues("action", req.Operation).Info("ServiceAccount request received")
 		return s.handleServiceAccount(ctx, req)
@@ -48,7 +51,7 @@ func (s *SSMParameterInjector) processAnnotations(ctx context.Context, annotatio
 
 	for key, value := range annotations {
 		if strings.HasPrefix(value, "ssm:/") {
-			log.Log.V(0).Info("SSM Parameter detected in annotation")
+			log.Log.Info("SSM Parameter detected in annotation")
 			log.Log.WithValues("paramKey", value).
 				V(1).Info("SSM Parameter detected")
 			paramName := strings.TrimPrefix(value, "ssm:/")
