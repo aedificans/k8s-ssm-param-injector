@@ -37,6 +37,9 @@ func (s *SSMParameterInjector) Handle(ctx context.Context, req admission.Request
 	case "ConfigMap":
 		log.Log.WithValues("action", req.Operation).Info("ConfigMap request received")
 		return s.handleConfigMap(ctx, req)
+	case "ExternalSecret":
+		log.Log.WithValues("action", req.Operation).Info("ExternalSecret request received")
+		return s.handleExternalSecret(ctx, req)
 	case "Ingress":
 		log.Log.WithValues("action", req.Operation).Info("Ingress request received")
 		return s.handleIngress(ctx, req)
