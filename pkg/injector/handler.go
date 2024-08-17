@@ -19,11 +19,8 @@ package injector
 import (
 	"context"
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
-	"net/http"
-	"strings"
-
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -38,12 +35,18 @@ func (s *SSMParameterInjector) Handle(ctx context.Context, req admission.Request
 	case "ConfigMap":
 		log.Log.WithValues("action", req.Operation).Info("ConfigMap request received")
 		return s.handleConfigMap(ctx, req)
+	case "CronJob":
+		log.Log.WithValues("action", req.Operation).Info("CronJob request received")
+		return s.handleCronJob(ctx, req)
 	case "ExternalSecret":
 		log.Log.WithValues("action", req.Operation).Info("ExternalSecret request received")
 		return s.handleExternalSecret(ctx, req)
 	case "Ingress":
 		log.Log.WithValues("action", req.Operation).Info("Ingress request received")
 		return s.handleIngress(ctx, req)
+	case "Job":
+		log.Log.WithValues("action", req.Operation).Info("Job request received")
+		return s.handleJob(ctx, req)
 	case "Pod":
 		log.Log.WithValues("action", req.Operation).Info("Pod request received")
 		return s.handlePod(ctx, req)
@@ -54,70 +57,4 @@ func (s *SSMParameterInjector) Handle(ctx context.Context, req admission.Request
 		log.Log.WithValues("action", req.Operation).Error(nil, "unsupported Kind")
 		return admission.Errored(http.StatusBadRequest, fmt.Errorf("unsupported Kind: %s", req.Kind.Kind))
 	}
-}
-
-func (s *SSMParameterInjector) processAnnotations(ctx context.Context, annotations map[string]string) (bool, error) {
-	wasModified := false
-
-	for key, value := range annotations {
-		if strings.HasPrefix(value, "ssm:/") {
-			log.Log.Info("SSM Parameter detected in annotation")
-			log.Log.WithValues("paramKey", value).
-				V(1).Info("SSM Parameter detected")
-			paramName := strings.TrimPrefix(value, "ssm:/")
-			paramValue, err := s.getSSMParameter(ctx, paramName)
-			if err != nil {
-				return false, err
-			}
-			log.Log.V(1).Info("Updating annotation with SSM Parameter value")
-			annotations[key] = paramValue
-			wasModified = true
-		}
-	}
-
-	return wasModified, nil
-}
-
-func (s *SSMParameterInjector) processContainers(ctx context.Context, containers []corev1.Container) (bool, error) {
-	wasModified := false
-
-	for i, container := range containers {
-		for j, envVar := range container.Env {
-			if strings.HasPrefix(envVar.Value, "ssm:/") {
-				log.Log.Info("SSM Parameter detected in container environment variable value")
-				log.Log.WithValues("paramKey", envVar.Value).
-					V(1).Info("SSM Parameter detected")
-				paramName := strings.TrimPrefix(envVar.Value, "ssm:/")
-				paramValue, err := s.getSSMParameter(ctx, paramName)
-				if err != nil {
-					return false, err
-				}
-				log.Log.V(1).Info("Updating container environment variable value with SSM Parameter value")
-				containers[i].Env[j].Value = paramValue
-				wasModified = true
-			}
-		}
-	}
-
-	return wasModified, nil
-}
-
-func (s *SSMParameterInjector) getSSMParameter(ctx context.Context, paramName string) (string, error) {
-	WithDecryption := true
-	ssmRequestInput := &ssm.GetParameterInput{
-		Name:           &paramName,
-		WithDecryption: &WithDecryption,
-	}
-
-	log.Log.WithValues("paramName", paramName).V(1).Info("Retrieving SSM Parameter value")
-	ssmResponse, err := s.SsmClient.GetParameter(ctx, ssmRequestInput)
-	if err != nil {
-		log.Log.WithValues("paramName", paramName).Error(err, "failed to retrieve SSM parameter")
-		return "", fmt.Errorf("failed to retrieve SSM parameter: %s", err)
-	}
-
-	log.Log.WithValues("paramValue", *ssmResponse.Parameter.Value).
-		V(2).Info("SSM Parameter retrieved value")
-	log.Log.V(1).Info("Returning retrieved SSM Parameter value")
-	return *ssmResponse.Parameter.Value, nil
 }
