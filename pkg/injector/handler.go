@@ -19,6 +19,7 @@ package injector
 import (
 	"context"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"net/http"
 	"strings"
 
@@ -43,6 +44,9 @@ func (s *SSMParameterInjector) Handle(ctx context.Context, req admission.Request
 	case "Ingress":
 		log.Log.WithValues("action", req.Operation).Info("Ingress request received")
 		return s.handleIngress(ctx, req)
+	case "Pod":
+		log.Log.WithValues("action", req.Operation).Info("Pod request received")
+		return s.handlePod(ctx, req)
 	case "ServiceAccount":
 		log.Log.WithValues("action", req.Operation).Info("ServiceAccount request received")
 		return s.handleServiceAccount(ctx, req)
@@ -68,6 +72,30 @@ func (s *SSMParameterInjector) processAnnotations(ctx context.Context, annotatio
 			log.Log.V(1).Info("Updating annotation with SSM Parameter value")
 			annotations[key] = paramValue
 			wasModified = true
+		}
+	}
+
+	return wasModified, nil
+}
+
+func (s *SSMParameterInjector) processContainers(ctx context.Context, containers []corev1.Container) (bool, error) {
+	wasModified := false
+
+	for i, container := range containers {
+		for j, envVar := range container.Env {
+			if strings.HasPrefix(envVar.Value, "ssm:/") {
+				log.Log.Info("SSM Parameter detected in container environment variable value")
+				log.Log.WithValues("paramKey", envVar.Value).
+					V(1).Info("SSM Parameter detected")
+				paramName := strings.TrimPrefix(envVar.Value, "ssm:/")
+				paramValue, err := s.getSSMParameter(ctx, paramName)
+				if err != nil {
+					return false, err
+				}
+				log.Log.V(1).Info("Updating container environment variable value with SSM Parameter value")
+				containers[i].Env[j].Value = paramValue
+				wasModified = true
+			}
 		}
 	}
 
