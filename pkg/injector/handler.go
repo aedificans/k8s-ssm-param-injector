@@ -34,6 +34,9 @@ type SSMParameterInjector struct {
 
 func (s *SSMParameterInjector) Handle(ctx context.Context, req admission.Request) admission.Response {
 	switch req.Kind.Kind {
+	case "ConfigMap":
+		log.Log.WithValues("action", req.Operation).Info("ConfigMap request received")
+		return s.handleConfigMap(ctx, req)
 	case "Ingress":
 		log.Log.WithValues("action", req.Operation).Info("Ingress request received")
 		return s.handleIngress(ctx, req)
