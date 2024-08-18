@@ -19,14 +19,14 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	_ "embed"
 	"flag"
 	"os"
 
-	"aedificans.com/k8s-ssm-param-injector/pkg/injector"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"aedificans.com/k8s-ssm-param-injector/pkg/injector"
+	"aedificans.com/k8s-ssm-param-injector/pkg/utils"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"go.uber.org/zap/zapcore"
@@ -38,8 +38,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	// +kubebuilder:scaffold:imports
 )
+
+//go:generate sh -c "printf %s $(git rev-parse --short HEAD) > commit.txt"
+//go:embed commit.txt
+var Commit string
 
 var (
 	scheme   = runtime.NewScheme()
@@ -48,29 +53,31 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
 	// +kubebuilder:scaffold:scheme
 }
 
 func main() {
-	var metricsAddr string
+	var awsRegion string
+	var enableHTTP2 bool
 	var enableLeaderElection bool
+	var metricsAddr string
 	var probeAddr string
 	var secureMetrics bool
-	var enableHTTP2 bool
-	var awsRegion string
-	flag.StringVar(&awsRegion, "aws-region", "us-east-1",
+	var webhookPort int
+	flag.StringVar(&awsRegion, "aws-region", utils.GetEnvString("AWS_REGION", "us-east-1"),
+		"The AWS region for the SSM client to create a session in for the service")
+	flag.BoolVar(&enableHTTP2, "enable-http2", utils.GetEnvBool("ENABLE_HTTP2", false),
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.BoolVar(&enableHTTP2, "enable-http2", false,
-		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
-		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
-	flag.BoolVar(&secureMetrics, "metrics-secure", true,
+	flag.StringVar(&probeAddr, "health-probe-bind-address", utils.GetEnvString("HEALTH_PROBE_BIND_ADDRESS", ":8081"),
+		"The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", utils.GetEnvBool("LEADER_ELECT", false),
+		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", utils.GetEnvString("METRICS_BIND_ADDRESS", "0"),
+		"The address the metrics endpoint binds to. Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
+	flag.BoolVar(&secureMetrics, "metrics-secure", utils.GetEnvBool("METRICS_SECURE", true),
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
+	flag.IntVar(&webhookPort, "webhook-address", utils.GetEnvInt("WEBHOOK_PORT", 8443),
+		"The port of the webhook server for the mutating webhook")
 	opts := zap.Options{
 		Encoder: zapcore.NewJSONEncoder(zapcore.EncoderConfig{
 			MessageKey:   "msg",
@@ -87,7 +94,7 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)).
-		WithValues("version", "0.0.1", "commit", "abcd1234"))
+		WithValues("app", "ssm-param-injector", "commit", Commit))
 
 	disableHTTP2 := func(c *tls.Config) {
 		setupLog.Info("disabling http/2")
@@ -123,7 +130,7 @@ func main() {
 
 	webhookServer := webhook.NewServer(webhook.Options{
 		CertDir: "ssl",
-		Port:    8443,
+		Port:    webhookPort,
 		TLSOpts: tlsOpts,
 	})
 	webhookServer.Register("/mutate", &webhook.Admission{
