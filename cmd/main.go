@@ -65,9 +65,9 @@ func main() {
 	var secureMetrics bool
 	var webhookPort int
 	flag.StringVar(&awsRegion, "aws-region", utils.GetEnvString("AWS_REGION", "us-east-1"),
-		"The AWS region for the SSM client to create a session in for the service")
+		"The AWS region for the SSM client to create a session in for the service.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", utils.GetEnvBool("ENABLE_HTTP2", false),
-		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+		"If set, HTTP/2 will be enabled for the metrics and webhook servers.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", utils.GetEnvString("HEALTH_PROBE_BIND_ADDRESS", ":8081"),
 		"The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", utils.GetEnvBool("LEADER_ELECT", false),
@@ -77,7 +77,7 @@ func main() {
 	flag.BoolVar(&secureMetrics, "metrics-secure", utils.GetEnvBool("METRICS_SECURE", true),
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.IntVar(&webhookPort, "webhook-address", utils.GetEnvInt("WEBHOOK_PORT", 8443),
-		"The port of the webhook server for the mutating webhook")
+		"The port of the webhook server for the mutating webhook.")
 	opts := zap.Options{
 		Encoder: zapcore.NewJSONEncoder(zapcore.EncoderConfig{
 			MessageKey:   "msg",
