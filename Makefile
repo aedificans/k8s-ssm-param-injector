@@ -155,22 +155,24 @@ helm-public: ## Push Helm chart to Public ECR registry.
 
 ##@ Deployment
 
-ifndef ignore-not-found
-  ignore-not-found = false
-endif
+HELM_RELEASE ?= my-param-injector
 
-.PHONY: install
-install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
+.PHONY: helm-install
+helm-install: helm-package ## Install the Helm chart into the K8s cluster specified in ~/.kube/config.
+	$(HELM) install ${HELM_RELEASE} ${HELM_CHART_NAME}-${HELM_CHART_VERSION}.tgz --set image.repository=${IMAGE_NAME} --set image.tag=${IMAGE_TAG}
 
-.PHONY: uninstall
-uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall the Helm chart from the K8s cluster specified in ~/.kube/config.
+	$(HELM) uninstall ${HELM_RELEASE}
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy webhook to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image webhook=${IMG}
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+
+ifndef ignore-not-found
+  ignore-not-found = false
+endif
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy webhook from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
