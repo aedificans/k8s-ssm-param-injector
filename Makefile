@@ -1,5 +1,7 @@
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMAGE_NAME ?= ssm-param-injector-webhook
+IMAGE_TAG ?= $(shell git describe --tags --exact-match 2> /dev/null || git rev-parse HEAD || git symbolic-ref -q HEAD)
+IMG ?= ${IMAGE_NAME}:${IMAGE_TAG}
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.30.0
 
@@ -50,6 +52,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	go generate cmd/
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -83,19 +86,20 @@ build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
+run: manifests generate fmt vet ## Run a webhook from your host.
 	go run ./cmd/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager.
+docker-build: generate ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
+
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
@@ -103,22 +107,51 @@ docker-push: ## Push docker image with the manager.
 # - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
+
+DOCKER_BUILDX_IMAGE ?= ${PUBLIC_ECR_REPOSITORY}
 PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 .PHONY: docker-buildx
-docker-buildx: ## Build and push docker image for the manager for cross-platform support
+docker-buildx: generate ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
 	- $(CONTAINER_TOOL) buildx create --name ssm-param-injector-builder
 	$(CONTAINER_TOOL) buildx use ssm-param-injector-builder
-	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
+	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${DOCKER_BUILDX_IMAGE}:${IMAGE_TAG} -tag ${DOCKER_BUILDX_IMAGE}:${IMAGE_TAG} -f Dockerfile.cross .
 	- $(CONTAINER_TOOL) buildx rm ssm-param-injector-builder
 	rm Dockerfile.cross
+
+AWS_REGION ?= us-east-1
+PUBLIC_ECR_ALIAS ?= aedificans
+PUBLIC_ECR_REGISTRY ?= public.ecr.aws/${PUBLIC_ECR_ALIAS}
+PUBLIC_ECR_REPOSITORY ?= ${PUBLIC_ECR_REGISTRY}/${IMAGE_NAME}
+
+.PHONY: ecr-login
+ecr-login: ## Login to Public ECR Docker registry.
+	aws ecr-public get-login-password --region ${AWS_REGION} | $(CONTAINER_TOOL) login --username AWS --password-stdin ${PUBLIC_ECR_REGISTRY}
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/manager && $(KUSTOMIZE) edit set image webhook=${IMG}
 	$(KUSTOMIZE) build config/default > dist/install.yaml
+
+HELM_CHART_NAME ?= $(shell yq chart/Chart.yaml -o json | jq -r '.name')
+HELM_CHART_REPO ?= oci://${PUBLIC_ECR_REGISTRY}
+HELM_CHART_VERSION ?= $(shell yq chart/Chart.yaml -o json | jq -r '.version')
+
+.PHONY: helm-package
+helm-package: ## Package Helm chart.
+	rm -f ssm-param-injector-*.tgz
+	$(HELM) package chart/
+
+.PHONY: helm-push
+helm-push: ## Push Helm chart to repository.
+	$(HELM) push ${HELM_CHART_NAME}-${HELM_CHART_VERSION}.tgz ${HELM_CHART_REPO}
+
+.PHONY: helm-public
+helm-public: ## Push Helm chart to Public ECR registry.
+	aws ecr-public get-login-password --region ${AWS_REGION} | helm registry login --username AWS --password-stdin public.ecr.aws
+	$(HELM) push ${HELM_CHART_NAME}-${HELM_CHART_VERSION}.tgz ${HELM_CHART_REPO}
 
 ##@ Deployment
 
@@ -135,12 +168,12 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: deploy
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+deploy: manifests kustomize ## Deploy webhook to the K8s cluster specified in ~/.kube/config.
+	cd config/manager && $(KUSTOMIZE) edit set image webhook=${IMG}
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
 .PHONY: undeploy
-undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+undeploy: kustomize ## Undeploy webhook from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Dependencies
@@ -151,6 +184,7 @@ $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
 ## Tool Binaries
+HELM ?= helm
 KUBECTL ?= kubectl
 KUSTOMIZE ?= $(LOCALBIN)/kustomize-$(KUSTOMIZE_VERSION)
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen-$(CONTROLLER_TOOLS_VERSION)
@@ -162,6 +196,13 @@ KUSTOMIZE_VERSION ?= v5.4.1
 CONTROLLER_TOOLS_VERSION ?= v0.15.0
 ENVTEST_VERSION ?= release-0.18
 GOLANGCI_LINT_VERSION ?= v1.57.2
+
+.PHONY: helm
+helm: ## Download Helm locally if necessary.
+	curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+	chmod 700 get_helm.sh
+	./get_helm.sh
+	rm -f get_helm.sh
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
