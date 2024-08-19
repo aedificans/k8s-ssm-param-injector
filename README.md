@@ -1,69 +1,44 @@
-# ssm-param-injector
-// TODO(user): Add simple overview of use/purpose
+# <img title="SSM Injector" src="./docs/images/Kubernetes.png" style="width: 24px;">  Kubernetes:  <img title="SSM Injector" src="./docs/images/AWS-SSM.png" style="margin-left: 5px; position: relative; width: 24px;"> AWS SSM Parameter Injector
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+A Kubernetes admissions controller which searches specific resources for SSM Parameter keys and, when found, retrieves the values for those parameters and injects them into the relevant requests.
+
+## TL;DR
+
+`helm install my-release oci://public.ecr.aws/aedificans/ssm-param-injector`
 
 ## Getting Started
 
 ### Prerequisites
-- go version v1.22.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+- `go` version `v1.22.0+`,
+- `docker` version `17.03+`.
+- `helm` version `v3.13.0+`.
+- `kubectl` version `v1.11.3+`.
+- Access to a Kubernetes `v1.20.0+` cluster.
 
 ### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/k8s-ssm-param-injector:tag
+make docker-build docker-push IMG=<some-registry>/ssm-param-injector-webhook:tag
 ```
 
 **NOTE:** This image ought to be published in the personal registry you specified.
 And it is required to have access to pull the image from the working environment.
 Make sure you have the proper permission to the registry if the above commands don’t work.
 
-**Install the CRDs into the cluster:**
+**Deploy the `MutatingWebhookConfiguration` to the cluster:**
 
 ```sh
-make install
-```
-
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
-
-```sh
-make deploy IMG=<some-registry>/k8s-ssm-param-injector:tag
+make helm-install IMAGE_NAME=<some-registry>/ssm-param-injector-webhook IMAGE_TAG=tag 
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
 privileges or be logged in as admin.
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+**UnDeploy the `MutatingWebhookConfiguration` from the cluster:**
 
 ```sh
-kubectl apply -k config/samples/
-```
-
->**NOTE**: Ensure that the samples has default values to test it out.
-
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
-
-```sh
-kubectl delete -k config/samples/
-```
-
-**Delete the APIs(CRDs) from the cluster:**
-
-```sh
-make uninstall
-```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
+make helm-uninstall
 ```
 
 ## Project Distribution
@@ -73,7 +48,7 @@ Following are the steps to build the installer and distribute this project to us
 1. Build the installer for the image built and published in the registry:
 
 ```sh
-make build-installer IMG=<some-registry>/k8s-ssm-param-injector:tag
+make build-installer IMG=<some-registry>/k8s-ssm-param-webhook:tag
 ```
 
 NOTE: The makefile target mentioned above generates an 'install.yaml'
