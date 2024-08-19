@@ -1,0 +1,186 @@
+# -- (string) An optional name for overriding the Chart name in resource names.
+nameOverride:
+# -- (string) An optional name to fully override naming of the resources.
+fullnameOverride:
+
+# -- (int) Specifies the number of replicas is autoscaling is disabled.
+replicaCount: 2
+
+# -- (int) The number of previous versions of the `Deployment` to retain.
+revisionHistoryLimit: 3
+
+image:
+  # -- (string) The container image for the webhook service.
+  repository: public.ecr.aws/aedificans/ssm-param-injector-webhook
+  # -- (string) The imagePullPolicy for the container image.
+  pullPolicy: IfNotPresent
+  # -- (string) Overrides the image tag whose default is the chart appVersion.
+  tag:
+
+# -- (array) An array of `imagePullSecrets`.
+imagePullSecrets: []
+
+# -- (string) The AWS region for the SSM client to create a session in for the service.
+awsRegion: us-east-1
+# -- (bool) If `true`, HTTP/2 will be enabled for the metrics and webhook servers.
+enableHttp2: false
+# -- (int) The port address the probe endpoints bind to.
+healthProbesPort: 8081
+# -- (bool) If `true`, enable leader election for controller manager. This will ensure there is only one active controller manager.
+leaderElection: false
+# -- (string) Log encoder.  Available options: `json` or `console`.
+logEncoder: json
+# -- (string) Log verbosity level.  Available options: `debug`, `info`, or `error`.
+logLevel: info
+# -- (string) Log level at and above which stacktraces are captured.  Available options: `info`, `error`, or `panic`.
+logStacktraceLevel: info
+# -- (string) Log time encoding.  Available options:  `epoch`, `millis`, `nano`, `iso8601`, `rfc3339`, or `rfc3339nano`.
+logTimeEncoding: iso8601
+# -- (bool) If `true`, create a `ClusterRole` for accessing the service's metrics endpoint.
+metricsClusterRoleEnabled: false
+# -- (int) The port address the metrics endpoint binds to.
+metricsPort: 8082
+# -- (bool) If `true``, the metrics endpoint is served securely via HTTPS instead of HTTP.
+metricsSecure: false
+
+serviceAccount:
+  # -- (bool) If `true`, create `ServiceAccount` resource.
+  create: true
+  # -- (bool) If `true`, automatically mount a `ServiceAccount`'s API credentials.
+  automount: true
+  # -- Annotations to add to the `ServiceAccount`, if created.
+  annotations: {}
+  # -- (string) The name of the service account to use.
+  name:
+
+mutatingWebhook:
+  # -- (array) A list of namespaces to be ignored by the webhook configuration.
+  namespacesToIgnore:
+  - kube-node-lease
+  - kube-public
+  - kube-system
+  # -- (array) A list of namespaces to be watched by the webhook configuration.
+  namespacesToInclude: []
+  # -- (array) A collection of label key/value pairs for limiting which resources should be selected.
+  objectSelectorLabels: {}
+  # -- (array) A list of namespaces to be watched by the webhook configuration.
+  rules: []
+  # - apiGroups: [""]
+  #   apiVersions: ["v1"]
+  #   operations: ["CREATE", "UPDATE"]
+  #   resources: ["configmaps", "pods", "serviceaccounts"]
+  # - apiGroups: ["batch"]
+  #   apiVersions: ["v1"]
+  #   operations: ["CREATE", "UPDATE"]
+  #   resources: ["cronjobs", "jobs"]
+  # - apiGroups: ["external-secrets.io"]
+  #   apiVersions: ["v1beta1"]
+  #   operations: ["CREATE", "UPDATE"]
+  #   resources: ["externalsecrets"]
+  # - apiGroups: ["networking.k8s.io"]
+  #   apiVersions: ["v1"]
+  #   operations: ["CREATE", "UPDATE"]
+  #   resources: ["ingresses"]
+
+# -- Annotations to add to the `Pod`.
+podAnnotations: {}
+# -- Labels to add to the `Pod`.
+podLabels: {}
+
+# -- [Pod security context](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.22/#podsecuritycontext-v1-core).
+podSecurityContext: {}
+#  runAsNonRoot: true
+#  seccompProfile:
+#    type: RuntimeDefault
+
+# -- [Security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container).
+securityContext: {}
+#  allowPrivilegeEscalation: false
+#  capabilities:
+#    drop:
+#      - "ALL"
+
+service:
+  # -- (string) The type of the `Service`.
+  type: ClusterIP
+  # -- (int) The port of the `Service`.
+  port: 8443
+
+ingress:
+  # -- (bool) If `true`, create an `Ingress` resource.
+  create: false
+  # -- (string) An optional name for the `Ingress`.
+  name: 
+  # -- Annotations to add to the `Ingress` resource.
+  annotations: {}
+  # -- (string) Specifies which `Ingress` controller will implement the resource.
+  className:
+  # -- (string) The hostname of the service for the `Ingress` resource.
+  hostname:
+  # -- (string) The root route to the service.
+  path: /
+  # -- (string) `Ingres`s path type. One of `Exact`, `Prefix` or `ImplementationSpecific`.
+  pathType: Prefix
+  # -- (string) A secret containing the TLS configuration for the hostname defined at `ingress.hostname`.
+  secretName: 
+  # -- (bool) Enable TLS configuration for the hostname defined at `ingress.hostname`.
+  tls: true
+
+# -- [Resources](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) for the primary container.
+resources: {}
+  # requests:
+  #   cpu: 50m
+  #   memory: 150M
+  # limits:
+  #   cpu: 50m
+  #   memory: 150M
+
+autoscaling:
+  # -- (bool) If `true`, create a `HorizontalPodAutoscaler` resource.
+  enabled: false
+  # -- (int) Specifies the minimum number of replicas for the `Deployment`.
+  minReplicas: 2
+  # -- (int) Specifies the maximum number of replicas for the `Deployment`.
+  maxReplicas: 6
+  # -- (int) The CPU utilization percentage at which scaling activities should occur.
+  targetCPUUtilizationPercentage: 80
+
+podDisruptionBudget:
+  # -- (bool) If `true`, create a `PodDisruptionBudget` resource
+  create: false
+  # -- (int / string) Specifies the minimum number or percentage of replicas required to be available during voluntary disruptions.
+  minAvailable: 50%
+
+certificate:
+  # -- (bool) If `true`, create a `Certificate` resource.
+  create: true
+  # -- Annotations to add to the `Certificate` resource.
+  annotations: {}
+  issuerRef:
+    # -- (string) The type of `cert-manager` `Issuer` for the service's `Certificate`.
+    kind: ClusterIssuer
+    # -- (string) The name of `cert-manager` `Issuer` for the service's `Certificate`.
+    name: self-signed-ca
+
+serviceMonitor:
+  # -- (bool) If `true`, create a `ServiceMonitor` resource.
+  create: false
+  # -- Annotations to add to the `ServiceMonitor`.
+  annotations: {}
+  # -- [TLS config](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#monitoring.coreos.com/v1.TLSConfig) for the `ServiceMonitor`.
+  tlsConfig:
+
+# -- [Volumes](https://kubernetes.io/docs/concepts/storage/volumes/) for the `Pod`.
+volumes: []
+
+# -- [Volume mounts](https://kubernetes.io/docs/concepts/storage/volumes/) for the primary container.
+volumeMounts: []
+
+# -- Node labels to match for `Pod` [scheduling](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/).
+nodeSelector: {}
+
+# -- Affinity settings for `Pod` [scheduling](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/). If an explicit label selector is not provided for pod affinity or pod anti-affinity one will be created from the pod selector labels.
+affinity: {}
+
+# -- Node taints which will be tolerated for `Pod` [scheduling](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/).
+tolerations: []

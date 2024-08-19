@@ -1,0 +1,25 @@
+{{- if .Values.certificate.create -}}
+{{- $fullName := include "ssm-param-injector.fullname" . -}}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "ssm-param-injector.labels" . | nindent 4 }}
+  {{- with .Values.certificate.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  secretName: {{ $fullName }}-certificate
+  usages:
+    - server auth
+    - client auth
+  dnsNames:
+  - "{{ $fullName }}.{{ .Release.Namespace }}.svc.cluster.local"
+  - "{{ $fullName }}.{{ .Release.Namespace }}.svc"
+  - "{{ $fullName }}"
+  issuerRef:
+    kind: {{ .Values.certificate.issuerRef.kind }}
+    name: {{ .Values.certificate.issuerRef.name }}
+{{- end }}

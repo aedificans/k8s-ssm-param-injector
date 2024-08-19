@@ -1,0 +1,16 @@
+{{- $fullName := include "ssm-param-injector.fullname" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "ssm-param-injector.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: webhook
+      protocol: TCP
+      name: webhook
+  selector:
+    {{- include "ssm-param-injector.selectorLabels" . | nindent 4 }}

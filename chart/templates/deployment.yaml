@@ -1,0 +1,120 @@
+{{- $fullName := include "ssm-param-injector.fullname" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "ssm-param-injector.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}  
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "ssm-param-injector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "ssm-param-injector.labels" . | nindent 8 }}
+	    {{- with .Values.podLabels }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ssm-param-injector.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          args:
+            - --aws-region={{ .Values.awsRegion }}
+            - --enable-http2={{ .Values.enableHttp2 }}
+            - --health-probe-bind-address=:{{ .Values.healthProbesPort }}
+            - --leader-elect={{ .Values.leaderElection }}
+            - --metrics-bind-address=:{{ .Values.metricsPort }}
+            - --metrics-secure={{ .Values.metricsSecure }}
+            - --webhook-address={{ .Values.service.port }}
+            - --zap-encoder={{ .Values.logEncoder }}
+            - --zap-log-level={{ .Values.logLevel }}
+            - --zap-stacktrace-level={{ .Values.logStacktraceLevel }}
+            - --zap-time-encoding={{ .Values.logTimeEncoding }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: healthz
+              containerPort: {{ .Values.healthProbesPort }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.metricsPort }}
+              protocol: TCP
+            - name: webhook
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+              scheme: HTTP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
+              scheme: HTTP
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}          
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+          - mountPath: "/app/ssl"
+            name: ssl-certificate
+            readOnly: true
+      volumes:
+      - name: ssl-certificate
+        secret:
+          secretName: {{ $fullName }}-certificate
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        {{- if .Values.affinity }}
+        {{- with .Values.affinity }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- else }}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+                      - arm64
+                      - ppc64le
+                      - s390x
+                  - key: kubernetes.io/os
+                    operator: In
+                    values:
+                      - linux
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "ssm-param-injector.selectorLabels" . | nindent 20 }}
+                topologyKey: "kubernetes.io/hostname"
+        {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

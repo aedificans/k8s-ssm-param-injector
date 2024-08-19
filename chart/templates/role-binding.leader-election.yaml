@@ -1,0 +1,17 @@
+{{- if .Values.leaderElection -}}
+{{- $fullName := include "ssm-param-injector.fullname" . -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullName }}-leader-election
+  labels:
+    {{- include "ssm-param-injector.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullName }}-leader-election
+subjects:
+- kind: ServiceAccount
+  name: {{ include "ssm-param-injector.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

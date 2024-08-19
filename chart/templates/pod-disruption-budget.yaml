@@ -1,0 +1,15 @@
+
+{{- if .Values.podDisruptionBudget.create }}
+{{- $fullName := include "ssm-param-injector.fullname" . -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "ssm-param-injector.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "ssm-param-injector.selectorLabels" . | nindent 6 }}
+{{- end }}

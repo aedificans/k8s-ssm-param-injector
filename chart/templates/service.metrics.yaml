@@ -1,0 +1,16 @@
+{{- $fullName := include "ssm-param-injector.fullname" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullName }}-metrics
+  labels:
+    {{- include "ssm-param-injector.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.metricsPort }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    {{- include "ssm-param-injector.selectorLabels" . | nindent 4 }}

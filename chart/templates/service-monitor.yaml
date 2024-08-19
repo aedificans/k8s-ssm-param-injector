@@ -1,0 +1,30 @@
+{{- if .Values.serviceMonitor.create -}}
+{{- $fullName := include "ssm-param-injector.fullname" . -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "ssm-param-injector.labels" . | nindent 4 }}
+  {{- with .Values.serviceMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  endpoints:
+    - path: /metrics
+      port: metrics
+      scheme: {{ ternary "HTTPS" "HTTP" .Values.metricsSecure }}
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        {{- if .Values.metricsSecure -}}
+        {{- with .Values.serviceMonitor.tlsConfig }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- else }}
+        insecureSkipVerify: true
+        {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ssm-param-injector.selectorLabels" . | nindent 6 }}
+{{- end }}

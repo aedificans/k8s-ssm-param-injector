@@ -1,0 +1,64 @@
+{{- $fullName := include "ssm-param-injector.fullname" . -}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "ssm-param-injector.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ $fullName }}
+webhooks:
+- name: {{ $fullName }}.{{ .Release.Namespace }}.svc
+  rules:
+  {{- if eq 0 (len .Values.mutatingWebhook.rules) }}
+  - apiGroups: [""]
+    apiVersions: ["v1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["configmaps", "pods", "serviceaccounts"]
+  - apiGroups: ["batch"]
+    apiVersions: ["v1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["cronjobs", "jobs"]
+  - apiGroups: ["external-secrets.io"]
+    apiVersions: ["v1beta1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["externalsecrets"]
+  - apiGroups: ["networking.k8s.io"]
+    apiVersions: ["v1"]
+    operations: ["CREATE", "UPDATE"]
+    resources: ["ingresses"]
+  {{- end }}  
+  {{- with .Values.mutatingWebhook.rules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ $fullName }}
+      namespace: {{ .Release.Namespace }}
+      path: /mutate
+      port: 8443
+  sideEffects: None
+  timeoutSeconds: 5
+  {{- with .Values.mutatingWebhook.objectSelectorLabels }}
+  objectSelector:
+    matchLabels:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}
+  {{- if or .Values.mutatingWebhook.namespacesToIgnore .Values.mutatingWebhook.namespacesToInclude }}
+  namespaceSelector:
+    matchExpressions:
+    {{- with .Values.mutatingWebhook.namespacesToInclude }}
+    - key: kubernetes.io/metadata.name
+      operator: In
+      values: 
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.mutatingWebhook.namespacesToIgnore }}
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values: 
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end }}
