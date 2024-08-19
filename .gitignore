@@ -80,4 +80,5 @@ go.work
 
 .idea/
 ssl/
+cmd/commit.txt
 ssm-param-injector-*.tgz

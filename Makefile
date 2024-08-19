@@ -52,7 +52,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
-	go generate cmd/
+	go generate ./cmd
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -116,7 +116,7 @@ docker-buildx: generate ## Build and push docker image for the manager for cross
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
 	- $(CONTAINER_TOOL) buildx create --name ssm-param-injector-builder
 	$(CONTAINER_TOOL) buildx use ssm-param-injector-builder
-	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${DOCKER_BUILDX_IMAGE}:${IMAGE_TAG} -tag ${DOCKER_BUILDX_IMAGE}:${IMAGE_TAG} -f Dockerfile.cross .
+	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${DOCKER_BUILDX_IMAGE}:${IMAGE_TAG} -f Dockerfile.cross .
 	- $(CONTAINER_TOOL) buildx rm ssm-param-injector-builder
 	rm Dockerfile.cross
 
