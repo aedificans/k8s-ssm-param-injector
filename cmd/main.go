@@ -71,9 +71,11 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", utils.GetEnvString("HEALTH_PROBE_BIND_ADDRESS", ":8081"),
 		"The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", utils.GetEnvBool("LEADER_ELECT", false),
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+		"Enable leader election for controller manager."+
+			" Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", utils.GetEnvString("METRICS_BIND_ADDRESS", "0"),
-		"The address the metrics endpoint binds to. Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
+		"The address the metrics endpoint binds to."+
+			" Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", utils.GetEnvBool("METRICS_SECURE", true),
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.IntVar(&webhookPort, "webhook-address", utils.GetEnvInt("WEBHOOK_PORT", 8443),
@@ -137,7 +139,10 @@ func main() {
 		Handler: &injector.SSMParameterInjector{
 			SsmClient: ssmClient,
 			Decoder:   admission.NewDecoder(scheme)}})
-	mgr.Add(webhookServer)
+	if err := mgr.Add(webhookServer); err != nil {
+		setupLog.Error(err, "unable to Add webhook server")
+		os.Exit(1)
+	}
 
 	// +kubebuilder:scaffold:builder
 
