@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"ssm-param-injector/test/utils"
+	"aedificans.com/k8s-ssm-param-injector/test/utils"
 )
 
 const namespace = "ssm-param-injector-system"

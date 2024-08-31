@@ -19,8 +19,10 @@ package injector
 import (
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"net/http"
+
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	_ "github.com/aws/aws-sdk-go-v2/service/ssm"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
